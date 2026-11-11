@@ -28,6 +28,8 @@ function setPreviewImage(file, previewEl, placeholderEl) {
     previewEl.src = url;
     previewEl.style.display = "block";
     if (placeholderEl) placeholderEl.style.display = "none";
+    const previewContainer = previewEl.closest(".upload-preview, .preview-area");
+    if (previewContainer) previewContainer.classList.add("has-image");
 }
 
 if (topImageInput) {
@@ -108,8 +110,18 @@ async function loadSampleMeal(autoScroll = false) {
 function clearUploads() {
     if (topImageInput) topImageInput.value = "";
     if (sideImageInput) sideImageInput.value = "";
-    if (topPreview) { topPreview.src = ""; topPreview.style.display = "none"; }
-    if (sidePreview) { sidePreview.src = ""; sidePreview.style.display = "none"; }
+    if (topPreview) {
+        topPreview.src = "";
+        topPreview.style.display = "none";
+        const topCont = topPreview.closest(".upload-preview, .preview-area");
+        if (topCont) topCont.classList.remove("has-image");
+    }
+    if (sidePreview) {
+        sidePreview.src = "";
+        sidePreview.style.display = "none";
+        const sideCont = sidePreview.closest(".upload-preview, .preview-area");
+        if (sideCont) sideCont.classList.remove("has-image");
+    }
     if (topPlaceholder) topPlaceholder.style.display = "flex";
     if (sidePlaceholder) sidePlaceholder.style.display = "flex";
     resultDiv.innerHTML = `

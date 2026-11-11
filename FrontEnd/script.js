@@ -113,10 +113,10 @@ function clearUploads() {
     if (topPlaceholder) topPlaceholder.style.display = "flex";
     if (sidePlaceholder) sidePlaceholder.style.display = "flex";
     resultDiv.innerHTML = `
-        <div class="initial-prompt">
-            <div class="prompt-icon">🍽️</div>
-            <h3>Photos Cleared</h3>
-            <p>Upload new photos or click <strong>Load Sample Meal</strong> to begin.</p>
+        <div class="empty-state">
+            <div class="empty-state-icon">🍽️</div>
+            <p class="empty-state-heading">Photos cleared</p>
+            <p class="empty-state-body">Upload new photos, then click Analyze.</p>
         </div>
     `;
 }
@@ -126,26 +126,12 @@ function escapeHtml(text) {
     return String(text).replace(/[&<>"']/g, (m) => map[m]);
 }
 
-function getConfidenceBadge(confidence) {
-    const conf = String(confidence || "medium").toLowerCase();
-    if (conf.includes("high") || conf === "high") {
-        return `<span class="badge badge-high">High</span>`;
-    } else if (conf.includes("low") || conf === "low") {
-        return `<span class="badge badge-low">Low</span>`;
-    }
-    return `<span class="badge badge-med">Medium</span>`;
-}
-
 // ─────────────────────────────────────────────────────────────
 // 3. MAIN DUAL-VIEW INFERENCE ORCHESTRATION
 // ─────────────────────────────────────────────────────────────
 async function analyzeFood() {
     if (!topImageInput || topImageInput.files.length === 0) {
-        resultDiv.innerHTML = `
-            <div class="initial-prompt" style="color: #b91c1c; background: #fef2f2; border-color: #fecaca;">
-                <p>⚠️ <strong>Missing Top-Down Photo:</strong> Please select at least an overhead (top-down) photo of the plate.</p>
-            </div>
-        `;
+        resultDiv.innerHTML = `<div class="alert-error"><strong>Missing overhead photo.</strong> Please upload or select an overhead photo of the plate.</div>`;
         return;
     }
 
@@ -159,57 +145,66 @@ async function analyzeFood() {
     formData.append("plate_diameter_cm", plateDiameter.toString());
 
     analyzeButton.disabled = true;
-    analyzeButton.innerHTML = `<span>⏳</span><span>Analyzing Plate Elevation & Geometry...</span>`;
+    analyzeButton.textContent = "Analyzing…";
 
     let _elapsed = 0;
     const steps = [
-        { label: "Validating images & running Hough circle plate rim calibration", pct: 15 },
-        { label: "DeepLabV3+ semantic segmentation on native overlapping tiles", pct: 35 },
-        { label: "Qwen3-VL multimodal culinary reasoning on food components", pct: 75 },
-        { label: "Applying IIIT-H density boundaries & running CatBoost models", pct: 95 }
+        { label: "Validating images & calibrating plate reference scale", pct: 20 },
+        { label: "Detecting plate boundary & food layout", pct: 45 },
+        { label: "Identifying meal components & portion depth", pct: 75 },
+        { label: "Calculating portion weights & nutritional breakdown", pct: 95 }
     ];
 
-    function renderStepperHtml(sec) {
-        let activeIdx = 0;
-        if (sec >= 4 && sec < 12) activeIdx = 1;
-        else if (sec >= 12 && sec < 35) activeIdx = 2;
-        else if (sec >= 35) activeIdx = 3;
-
-        const currentStep = steps[activeIdx];
-        const pct = Math.min(100, Math.max(10, currentStep.pct + Math.floor((sec % 8) * 1.5)));
-
-        let listHtml = "";
-        steps.forEach((s, idx) => {
-            const statusClass = idx === activeIdx ? "active" : (idx < activeIdx ? "done" : "");
-            const bullet = idx < activeIdx ? "✓" : (idx + 1);
-            listHtml += `
-                <div class="step-item ${statusClass}">
-                    <div class="step-bullet">${bullet}</div>
-                    <span>${s.label}</span>
-                </div>
-            `;
-        });
-
+    // Render the stepper skeleton ONCE into the DOM
+    function renderStepperSkeleton() {
+        const stepListHtml = steps.map((s, i) => `
+            <div class="step-item" id="stepItem${i}">
+                <div class="step-bullet" id="stepBullet${i}">${i + 1}</div>
+                <span>${s.label}</span>
+            </div>
+        `).join('');
         return `
             <div class="pipeline-progress-box">
                 <div class="stepper-header">
-                    <span class="stepper-title">🧠 AI Processing Pipeline</span>
-                    <span class="stepper-timer">⏱️ ${_elapsed}s elapsed</span>
+                    <span class="stepper-title">Analyzing</span>
+                    <span class="stepper-timer" id="stepperTimer">0s</span>
                 </div>
                 <div class="progress-bar-track">
-                    <div class="progress-bar-fill" style="width: ${pct}%"></div>
+                    <div class="progress-bar-fill" id="stepperFill" style="width: 10%"></div>
                 </div>
-                <div class="stepper-list">
-                    ${listHtml}
-                </div>
-            </div>
-        `;
+                <div class="stepper-list">${stepListHtml}</div>
+            </div>`;
     }
 
-    resultDiv.innerHTML = renderStepperHtml(0);
+    // Update only the timer, fill, and step states — no full DOM replace
+    function updateStepper(sec) {
+        let activeIdx = 0;
+        if (sec >= 3 && sec < 10) activeIdx = 1;
+        else if (sec >= 10 && sec < 28) activeIdx = 2;
+        else if (sec >= 28) activeIdx = 3;
+
+        const pct = Math.min(95, Math.max(10, steps[activeIdx].pct + Math.floor((sec % 6) * 1.5)));
+
+        const timerEl = document.getElementById('stepperTimer');
+        if (timerEl) timerEl.textContent = `${sec}s`;
+
+        const fillEl = document.getElementById('stepperFill');
+        if (fillEl) fillEl.style.width = `${pct}%`;
+
+        steps.forEach((_, idx) => {
+            const itemEl = document.getElementById(`stepItem${idx}`);
+            const bulletEl = document.getElementById(`stepBullet${idx}`);
+            if (!itemEl || !bulletEl) return;
+            itemEl.className = idx === activeIdx ? 'step-item active' : (idx < activeIdx ? 'step-item done' : 'step-item');
+            bulletEl.textContent = idx < activeIdx ? '✓' : String(idx + 1);
+        });
+    }
+
+    // Render skeleton once, then update in-place each second
+    resultDiv.innerHTML = renderStepperSkeleton();
     const _timerInterval = setInterval(() => {
         _elapsed++;
-        resultDiv.innerHTML = renderStepperHtml(_elapsed);
+        updateStepper(_elapsed);
     }, 1000);
 
     try {
@@ -220,11 +215,7 @@ async function analyzeFood() {
         if (!visionResponse.ok || visionData.error || visionData.detail) {
             clearInterval(_timerInterval);
             const errMsg = visionData.error || visionData.detail || `Vision server returned status ${visionResponse.status}`;
-            resultDiv.innerHTML = `
-                <div class="initial-prompt" style="color: #b91c1c; background: #fef2f2; border-color: #fecaca;">
-                    <p>❌ <strong>Vision Analysis Failed:</strong> ${escapeHtml(errMsg)}</p>
-                </div>
-            `;
+            resultDiv.innerHTML = `<div class="alert-error"><strong>Vision analysis failed.</strong> ${escapeHtml(errMsg)}</div>`;
             return;
         }
 
@@ -245,11 +236,7 @@ async function analyzeFood() {
 
         if (!mlResponse.ok || mlData.error || mlData.detail) {
             const errMsg = mlData.error || mlData.detail || `Nutrition regression returned status ${mlResponse.status}`;
-            resultDiv.innerHTML = `
-                <div class="initial-prompt" style="color: #b91c1c; background: #fef2f2; border-color: #fecaca;">
-                    <p>❌ <strong>Nutrition Calculation Failed:</strong> ${escapeHtml(errMsg)}</p>
-                </div>
-            `;
+            resultDiv.innerHTML = `<div class="alert-error"><strong>Nutrition calculation failed.</strong> ${escapeHtml(errMsg)}</div>`;
             return;
         }
 
@@ -266,15 +253,10 @@ async function analyzeFood() {
     } catch (error) {
         clearInterval(_timerInterval);
         console.error("API error:", error);
-        resultDiv.innerHTML = `
-            <div class="initial-prompt" style="color: #b91c1c; background: #fef2f2; border-color: #fecaca;">
-                <p>❌ <strong>Connection Error:</strong> ${escapeHtml(error.message || "Unknown error")}.<br>
-                Ensure Vision Service (port 8001) and Nutrition Service (port 8000) are both running.</p>
-            </div>
-        `;
+        resultDiv.innerHTML = `<div class="alert-error"><strong>Connection error:</strong> ${escapeHtml(error.message || 'Unknown error')}. Ensure the Vision Service (port 8001) and Nutrition Service (port 8000) are both running.</div>`;
     } finally {
         analyzeButton.disabled = false;
-        analyzeButton.innerHTML = `<span class="btn-icon">🔬</span><span class="btn-text">Analyze Food & Run Regression Models</span>`;
+        analyzeButton.textContent = "Analyze meal";
     }
 }
 
@@ -290,7 +272,7 @@ async function recalculateNutrition() {
     const recalcBtn = document.getElementById("recalcBtn");
     if (recalcBtn) {
         recalcBtn.disabled = true;
-        recalcBtn.innerHTML = `<span>⏳</span> Recalculating...`;
+        recalcBtn.textContent = "Recalculating…";
     }
 
     try {
@@ -365,20 +347,20 @@ function addCustomIngredient() {
 }
 
 // ─────────────────────────────────────────────────────────────
-// 5. RENDER COMPLETE ANALYSIS DOM
+// 5. RENDER ANALYSIS RESULTS
 // ─────────────────────────────────────────────────────────────
 function renderAnalysisResults(data) {
-    const dishName = escapeHtml(data.dish || "Detected Plated Meal");
+    const dishName = escapeHtml(data.dish || "Plated Meal");
     const scale = data.scale_reference || {};
-    const scaleDetected = scale.detected ? "✅ Rim Calibrated" : "⚠️ Estimated (Uncalibrated)";
-    const footprintText = scale.food_footprint_cm2 ? ` &bull; Footprint: ${scale.food_footprint_cm2} cm²` : "";
-    const plateText = `🍽️ ${scaleDetected} (${scale.plate_diameter_cm || 25} cm Plate${footprintText})`;
+    const plateText = scale.detected
+        ? `Calibrated — ${scale.plate_diameter_cm || 25} cm plate`
+        : `${scale.plate_diameter_cm || 25} cm plate (estimated)`;
 
     const totals = data.recipe_totals || {
         total_weight_g: 0, energy_kcal: 0, carb_g: 0, protein_g: 0, fat_g: 0, fibre_g: 0
     };
 
-    // Macro Split calculation (Carb: 4 kcal/g, Prot: 4 kcal/g, Fat: 9 kcal/g)
+    // Caloric macro proportions (Carb: 4 kcal/g, Prot: 4 kcal/g, Fat: 9 kcal/g)
     const carbKcal = Math.max(0, totals.carb_g * 4);
     const protKcal = Math.max(0, totals.protein_g * 4);
     const fatKcal  = Math.max(0, totals.fat_g * 9);
@@ -388,41 +370,41 @@ function renderAnalysisResults(data) {
     const protPct = Math.round((protKcal / sumMacroKcal) * 100);
     const fatPct  = Math.max(0, 100 - carbPct - protPct);
 
-    // 1. Totals Banner
+    // 1. Data strip
     const totalsHtml = `
-        <div class="totals-summary-banner">
-            <div class="total-stat-box">
-                <div class="stat-label">Total Weight</div>
-                <div class="stat-value">${totals.total_weight_g} g</div>
+        <div class="result-data-strip">
+            <div class="data-cell data-cell-primary">
+                <div class="data-cell-label">Calories</div>
+                <div class="data-cell-value">${totals.energy_kcal}<span class="data-cell-unit">kcal</span></div>
             </div>
-            <div class="total-stat-box">
-                <div class="stat-label">Calories</div>
-                <div class="stat-value">${totals.energy_kcal} kcal</div>
+            <div class="data-cell">
+                <div class="data-cell-label">Weight</div>
+                <div class="data-cell-value">${totals.total_weight_g}<span class="data-cell-unit">g</span></div>
             </div>
-            <div class="total-stat-box">
-                <div class="stat-label">Carbs</div>
-                <div class="stat-value">${totals.carb_g} g</div>
+            <div class="data-cell">
+                <div class="data-cell-label">Carbs</div>
+                <div class="data-cell-value">${totals.carb_g}<span class="data-cell-unit">g</span></div>
             </div>
-            <div class="total-stat-box">
-                <div class="stat-label">Protein</div>
-                <div class="stat-value">${totals.protein_g} g</div>
+            <div class="data-cell">
+                <div class="data-cell-label">Protein</div>
+                <div class="data-cell-value">${totals.protein_g}<span class="data-cell-unit">g</span></div>
             </div>
-            <div class="total-stat-box">
-                <div class="stat-label">Fats</div>
-                <div class="stat-value">${totals.fat_g} g</div>
+            <div class="data-cell">
+                <div class="data-cell-label">Fats</div>
+                <div class="data-cell-value">${totals.fat_g}<span class="data-cell-unit">g</span></div>
             </div>
-            <div class="total-stat-box">
-                <div class="stat-label">Fibre</div>
-                <div class="stat-value">${totals.fibre_g} g</div>
+            <div class="data-cell">
+                <div class="data-cell-label">Fibre</div>
+                <div class="data-cell-value">${totals.fibre_g}<span class="data-cell-unit">g</span></div>
             </div>
         </div>
     `;
 
-    // 2. Macro Split Bar
+    // 2. Caloric macro distribution bar
     const macroSplitHtml = `
         <div class="macro-dist-box">
             <div class="macro-dist-header">
-                <span>⚡ Caloric Macro Distribution</span>
+                <span>Caloric split</span>
                 <span>${totals.energy_kcal} kcal total</span>
             </div>
             <div class="macro-split-bar">
@@ -432,37 +414,41 @@ function renderAnalysisResults(data) {
             </div>
             <div class="macro-legend">
                 <div class="legend-item">
-                    <span class="legend-dot" style="background: var(--accent-blue)"></span>
-                    <span>Carbs: <strong>${totals.carb_g}g</strong> (${carbPct}%)</span>
+                    <span class="legend-dot" style="background: var(--carb-color)"></span>
+                    <span>Carbs: ${totals.carb_g}g (${carbPct}%)</span>
                 </div>
                 <div class="legend-item">
-                    <span class="legend-dot" style="background: var(--primary)"></span>
-                    <span>Protein: <strong>${totals.protein_g}g</strong> (${protPct}%)</span>
+                    <span class="legend-dot" style="background: var(--protein-color)"></span>
+                    <span>Protein: ${totals.protein_g}g (${protPct}%)</span>
                 </div>
                 <div class="legend-item">
-                    <span class="legend-dot" style="background: var(--accent-amber)"></span>
-                    <span>Fats: <strong>${totals.fat_g}g</strong> (${fatPct}%)</span>
+                    <span class="legend-dot" style="background: var(--fat-color)"></span>
+                    <span>Fats: ${totals.fat_g}g (${fatPct}%)</span>
+                </div>
+                <div class="legend-item">
+                    <span class="legend-dot" style="background: var(--fibre-color)"></span>
+                    <span>Fibre: ${totals.fibre_g}g</span>
                 </div>
             </div>
         </div>
     `;
 
-    // 3. Interactive Ingredient Tray
+    // 3. Interactive ingredient tray
     let ingrRowsHtml = "";
     for (const [name, weight] of Object.entries(window.currentIngredients)) {
         const cleanName = escapeHtml(name);
         ingrRowsHtml += `
             <div class="ingr-chip-row">
                 <div class="ingr-name-col">
-                    <span>🍛</span>
+                    <span class="food-emoji">🍲</span>
                     <span>${cleanName}</span>
                 </div>
                 <div class="ingr-stepper-col">
-                    <button type="button" class="btn-step" onclick="adjustWeight('${cleanName}', -10)">-</button>
+                    <button type="button" class="btn-step" onclick="adjustWeight('${cleanName}', -10)" title="Subtract 10g">−</button>
                     <input type="number" id="weight_input_${cleanName}" class="input-gram" value="${weight}" min="5" step="5" onchange="updateWeightManual('${cleanName}', this.value)">
                     <span class="unit-label">g</span>
-                    <button type="button" class="btn-step" onclick="adjustWeight('${cleanName}', 10)">+</button>
-                    <button type="button" class="btn-remove-ingr" onclick="removeIngredient('${cleanName}')" title="Remove ingredient">✕</button>
+                    <button type="button" class="btn-step" onclick="adjustWeight('${cleanName}', 10)" title="Add 10g">+</button>
+                    <button type="button" class="btn-remove-ingr" onclick="removeIngredient('${cleanName}')" title="Remove item">✕</button>
                 </div>
             </div>
         `;
@@ -471,25 +457,25 @@ function renderAnalysisResults(data) {
     const interactiveTrayHtml = `
         <div class="interactive-tray-container">
             <div class="tray-title-row">
-                <h4>🎛️ Interactive Ingredient Review (Human-in-the-Loop)</h4>
-                <span class="upload-hint" style="margin:0">Fine-tune weights or add components before confirming</span>
+                <h4>Meal components</h4>
+                <span class="tray-subtext">Adjust portion weights before recalculating</span>
             </div>
             <div class="ingredient-chips-list">
-                ${ingrRowsHtml || '<p style="color:#888;font-size:13px">No ingredients selected.</p>'}
+                ${ingrRowsHtml || '<p style="color:var(--text-3);font-size:13px;padding:8px 0">No food items listed.</p>'}
             </div>
             <div class="tray-add-row">
-                <input type="text" id="newIngrName" class="input-add-name" placeholder="Add ingredient (e.g. Papad, Roti, Ghee)...">
+                <input type="text" id="newIngrName" class="input-add-name" placeholder="Add food item (e.g. Roti, Dal, Salad)…">
                 <input type="number" id="newIngrWeight" class="input-add-weight" placeholder="100" value="100" min="5" step="5">
                 <span class="unit-label">g</span>
-                <button type="button" class="btn-add-ingr" onclick="addCustomIngredient()">+ Add</button>
+                <button type="button" class="btn-add-ingr" onclick="addCustomIngredient()">Add</button>
             </div>
             <button type="button" id="recalcBtn" class="btn-recalc-nutrition" onclick="recalculateNutrition()">
-                <span>🔄</span> Recalculate Nutrition Totals
+                Recalculate nutrition
             </button>
         </div>
     `;
 
-    // 4. Regression Nutrition Results Table
+    // 4. Nutrient breakdown table
     let regressionRows = "";
     const nutritionList = data.nutrition || [];
     nutritionList.forEach((item) => {
@@ -507,78 +493,38 @@ function renderAnalysisResults(data) {
     });
 
     const regressionTableHtml = `
-        <h4 class="result-section-title">📊 CatBoost Regression Nutrient Predictions</h4>
+        <p class="result-section-title">Nutrient breakdown</p>
         <div class="table-responsive">
             <table class="results-table">
                 <thead>
                     <tr>
-                        <th>Ingredient</th>
-                        <th>Weight</th>
+                        <th>Food item</th>
+                        <th>Portion</th>
                         <th>Calories</th>
                         <th>Carbs</th>
                         <th>Protein</th>
-                        <th>Fat</th>
+                        <th>Fats</th>
                         <th>Fibre</th>
                     </tr>
                 </thead>
                 <tbody>
-                    ${regressionRows || '<tr><td colspan="7">No nutritional regression predictions returned.</td></tr>'}
+                    ${regressionRows || '<tr><td colspan="7">No nutritional values calculated.</td></tr>'}
                 </tbody>
             </table>
         </div>
     `;
 
-    // 5. Vision Physical Calibration Table
-    let estimatesRows = "";
-    const estimates = data.estimates || [];
-    if (estimates.length > 0) {
-        estimates.forEach((item) => {
-            const name = escapeHtml(item.name || "Item");
-            const weight = item.weight_g ? item.weight_g.estimate : (window.currentIngredients[item.name] || "--");
-            const vol = item.volume_ml ? `${item.volume_ml.min} - ${item.volume_ml.max}` : "--";
-            const density = item.density_g_per_ml ? `${item.density_g_per_ml.min} - ${item.density_g_per_ml.max}` : "--";
-            const badge = getConfidenceBadge(item.confidence);
-
-            estimatesRows += `
-                <tr>
-                    <td><strong>${name}</strong></td>
-                    <td><strong>${weight} g</strong></td>
-                    <td>${vol} ml</td>
-                    <td>${density} g/cm³</td>
-                    <td>${badge}</td>
-                </tr>
-            `;
-        });
-    }
-
-    const estimatesTableHtml = `
-        <h4 class="result-section-title">⚖️ Physical Density & Volume Calibration</h4>
-        <div class="table-responsive">
-            <table class="results-table">
-                <thead>
-                    <tr>
-                        <th>Ingredient</th>
-                        <th>Estimated Weight</th>
-                        <th>Estimated Volume</th>
-                        <th>Density Range</th>
-                        <th>Confidence</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${estimatesRows || '<tr><td colspan="5">No physical calibrations estimated.</td></tr>'}
-                </tbody>
-            </table>
-        </div>
-    `;
-
-    // 6. Action Toolbar
+    // 5. Action toolbar
     const actionToolbarHtml = `
         <div class="report-action-bar">
             <button type="button" class="btn-report" onclick="window.copyMealSummary()">
-                📋 Copy Summary
+                Copy summary
             </button>
             <button type="button" class="btn-report" onclick="window.printMealReport()">
-                🖨️ Print Report
+                Print
+            </button>
+            <button type="button" class="btn-report btn-report-primary" onclick="document.getElementById('analyzer').scrollIntoView({behavior:'smooth'})">
+                Analyze another
             </button>
         </div>
     `;
@@ -586,42 +532,15 @@ function renderAnalysisResults(data) {
     // Combine into final DOM
     resultDiv.innerHTML = `
         <div class="result-card-header">
-            <h3>🍛 ${dishName}</h3>
+            <h3>${dishName}</h3>
             <span class="scale-badge">${plateText}</span>
         </div>
         ${totalsHtml}
         ${macroSplitHtml}
         ${interactiveTrayHtml}
         ${regressionTableHtml}
-        ${estimatesTableHtml}
         ${actionToolbarHtml}
     `;
-
-    // Update bottom nutrition grid
-    updateNutritionCards(totals, data.micronutrients);
-}
-
-function updateNutritionCards(totals, micronutrients) {
-    if (!totals) return;
-    const micro = micronutrients || {};
-
-    const setVal = (id, val, unit) => {
-        const el = document.getElementById(id);
-        if (el) el.textContent = `${val !== undefined && val !== null ? val : "--"} ${unit}`;
-    };
-
-    setVal("calories", totals.energy_kcal, "kcal");
-    setVal("carbohydrates", totals.carb_g, "g");
-    setVal("protein", totals.protein_g, "g");
-    setVal("fats", totals.fat_g, "g");
-    setVal("fibre", totals.fibre_g, "g");
-
-    setVal("free-sugar", micro.free_sugar !== undefined ? micro.free_sugar : 0.0, "g");
-    setVal("sodium", micro.sodium !== undefined ? micro.sodium : 0.0, "mg");
-    setVal("calcium", micro.calcium !== undefined ? micro.calcium : 0.0, "mg");
-    setVal("iron", micro.iron !== undefined ? micro.iron : 0.0, "mg");
-    setVal("vitamin-c", micro.vitamin_c !== undefined ? micro.vitamin_c : 0.0, "mg");
-    setVal("folate", micro.folate !== undefined ? micro.folate : 0.0, "µg");
 }
 
 window.printMealReport = function () {
@@ -632,11 +551,11 @@ window.copyMealSummary = function () {
     if (!window.currentAnalysisData) return;
     const d = window.currentAnalysisData;
     const t = d.recipe_totals || {};
-    let text = `NutriScanAI Nutrition Summary:\n`;
-    text += `Dish: ${d.dish || "Meal"}\n`;
+    let text = `NutriScanAI — Meal summary\n`;
+    text += `Meal: ${d.dish || "Plated Meal"}\n`;
     text += `Total Weight: ${t.total_weight_g}g | Calories: ${t.energy_kcal} kcal\n`;
-    text += `Carbs: ${t.carb_g}g | Protein: ${t.protein_g}g | Fat: ${t.fat_g}g | Fibre: ${t.fibre_g}g\n\n`;
-    text += `Ingredients:\n`;
+    text += `Carbs: ${t.carb_g}g | Protein: ${t.protein_g}g | Fats: ${t.fat_g}g | Fibre: ${t.fibre_g}g\n\n`;
+    text += `Components:\n`;
     for (const [name, weight] of Object.entries(window.currentIngredients)) {
         text += `- ${name}: ${weight}g\n`;
     }

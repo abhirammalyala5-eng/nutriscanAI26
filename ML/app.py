@@ -165,16 +165,17 @@ async def analyze_dual(
         raise HTTPException(status_code=422, detail="plate_diameter_cm must be positive")
 
     top_bytes = await top_image.read()
-    side_bytes = await side_image.read() if side_image else top_bytes
+    side_bytes = await side_image.read() if (side_image and getattr(side_image, "filename", None)) else None
 
     files = {
         "top_image": (top_image.filename or "top.jpg", top_bytes, top_image.content_type or "image/jpeg"),
-        "side_image": (
-            (side_image.filename or "side.jpg") if side_image else "side.jpg",
-            side_bytes,
-            (side_image.content_type if side_image else "image/jpeg") or "image/jpeg",
-        ),
     }
+    if side_bytes:
+        files["side_image"] = (
+            side_image.filename or "side.jpg",
+            side_bytes,
+            side_image.content_type or "image/jpeg",
+        )
     data = {"plate_diameter_cm": str(plate_diameter_cm)}
 
     try:

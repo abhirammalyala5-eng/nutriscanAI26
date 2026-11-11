@@ -23,6 +23,7 @@ __pycache__/
 *.bak
 *.tmp
 catboost_info/
+scratch/
 
 # OS and IDE files
 .DS_Store

@@ -150,7 +150,7 @@ async function analyzeFood() {
     }
 
     const topFile = topImageInput.files[0];
-    const sideFile = (sideImageInput && sideImageInput.files.length > 0) ? sideImageInput.files[0] : topFile;
+    const sideFile = (sideImageInput && sideImageInput.files.length > 0) ? sideImageInput.files[0] : null;
     const plateDiameter = plateDiameterInput ? parseFloat(plateDiameterInput.value) || 25.0 : 25.0;
 
     const formData = new FormData();

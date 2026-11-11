@@ -1,0 +1,437 @@
+[
+  {
+    "image_index": 1,
+    "label": "Sample Meal (Top View)",
+    "filename": "sample_meal_top.jpg",
+    "resolution": "512x512",
+    "tiling": {
+      "latency_sec": 0.323,
+      "tiles": 1,
+      "classes": [
+        {
+          "class": "ice cream",
+          "class_id": 8,
+          "area_percent": 5.36
+        }
+      ],
+      "food_pixels": 14060
+    },
+    "direct_resize": {
+      "latency_sec": 0.269,
+      "tiles": 1,
+      "classes": [
+        {
+          "class": "ice cream",
+          "class_id": 8,
+          "area_percent": 5.36
+        }
+      ],
+      "food_pixels": 14060
+    },
+    "letterbox_pad": {
+      "latency_sec": 0.309,
+      "tiles": 1,
+      "classes": [
+        {
+          "class": "ice cream",
+          "class_id": 8,
+          "area_percent": 5.36
+        }
+      ],
+      "food_pixels": 14060
+    }
+  },
+  {
+    "image_index": 2,
+    "label": "Indian Meal - Rice, Curry, Chicken",
+    "filename": "media_1794333290174_811312a7.jpg",
+    "resolution": "517x593",
+    "tiling": {
+      "latency_sec": 1.095,
+      "tiles": 4,
+      "classes": [
+        {
+          "class": "pie",
+          "class_id": 67,
+          "area_percent": 17.1
+        },
+        {
+          "class": "sauce",
+          "class_id": 52,
+          "area_percent": 14.69
+        },
+        {
+          "class": "cucumber",
+          "class_id": 82,
+          "area_percent": 3.06
+        },
+        {
+          "class": "cilantro mint",
+          "class_id": 89,
+          "area_percent": 1.64
+        },
+        {
+          "class": "lemon",
+          "class_id": 37,
+          "area_percent": 1.0
+        },
+        {
+          "class": "onion",
+          "class_id": 93,
+          "area_percent": 0.16
+        }
+      ],
+      "food_pixels": 115454
+    },
+    "direct_resize": {
+      "latency_sec": 0.303,
+      "tiles": 1,
+      "classes": [
+        {
+          "class": "pie",
+          "class_id": 67,
+          "area_percent": 16.24
+        },
+        {
+          "class": "sauce",
+          "class_id": 52,
+          "area_percent": 14.26
+        },
+        {
+          "class": "cucumber",
+          "class_id": 82,
+          "area_percent": 3.75
+        },
+        {
+          "class": "cilantro mint",
+          "class_id": 89,
+          "area_percent": 1.68
+        },
+        {
+          "class": "lemon",
+          "class_id": 37,
+          "area_percent": 1.01
+        },
+        {
+          "class": "fish",
+          "class_id": 54,
+          "area_percent": 0.74
+        },
+        {
+          "class": "chicken duck",
+          "class_id": 48,
+          "area_percent": 0.18
+        }
+      ],
+      "food_pixels": 116107
+    },
+    "letterbox_pad": {
+      "latency_sec": 0.328,
+      "tiles": 1,
+      "classes": [
+        {
+          "class": "sauce",
+          "class_id": 52,
+          "area_percent": 15.63
+        },
+        {
+          "class": "pie",
+          "class_id": 67,
+          "area_percent": 15.59
+        },
+        {
+          "class": "cucumber",
+          "class_id": 82,
+          "area_percent": 3.42
+        },
+        {
+          "class": "cilantro mint",
+          "class_id": 89,
+          "area_percent": 1.64
+        },
+        {
+          "class": "lemon",
+          "class_id": 37,
+          "area_percent": 1.02
+        },
+        {
+          "class": "onion",
+          "class_id": 93,
+          "area_percent": 0.2
+        }
+      ],
+      "food_pixels": 114990
+    }
+  },
+  {
+    "image_index": 3,
+    "label": "Plated Rice & Curry Meal",
+    "filename": "media_1794335734564_d0f40611.jpg",
+    "resolution": "672x898",
+    "tiling": {
+      "latency_sec": 1.431,
+      "tiles": 4,
+      "classes": [
+        {
+          "class": "rice",
+          "class_id": 66,
+          "area_percent": 4.77
+        },
+        {
+          "class": "pork",
+          "class_id": 47,
+          "area_percent": 2.24
+        },
+        {
+          "class": "chicken duck",
+          "class_id": 48,
+          "area_percent": 1.31
+        },
+        {
+          "class": "steak",
+          "class_id": 46,
+          "area_percent": 0.95
+        },
+        {
+          "class": "cilantro mint",
+          "class_id": 89,
+          "area_percent": 0.69
+        },
+        {
+          "class": "white button mushroom",
+          "class_id": 101,
+          "area_percent": 0.28
+        },
+        {
+          "class": "noodles",
+          "class_id": 65,
+          "area_percent": 0.24
+        },
+        {
+          "class": "potato",
+          "class_id": 70,
+          "area_percent": 0.19
+        }
+      ],
+      "food_pixels": 64412
+    },
+    "direct_resize": {
+      "latency_sec": 0.417,
+      "tiles": 1,
+      "classes": [
+        {
+          "class": "rice",
+          "class_id": 66,
+          "area_percent": 5.14
+        },
+        {
+          "class": "broccoli",
+          "class_id": 87,
+          "area_percent": 2.08
+        },
+        {
+          "class": "noodles",
+          "class_id": 65,
+          "area_percent": 0.73
+        }
+      ],
+      "food_pixels": 48020
+    },
+    "letterbox_pad": {
+      "latency_sec": 0.439,
+      "tiles": 1,
+      "classes": [
+        {
+          "class": "rice",
+          "class_id": 66,
+          "area_percent": 5.37
+        },
+        {
+          "class": "broccoli",
+          "class_id": 87,
+          "area_percent": 3.65
+        },
+        {
+          "class": "cilantro mint",
+          "class_id": 89,
+          "area_percent": 1.29
+        }
+      ],
+      "food_pixels": 62185
+    }
+  },
+  {
+    "image_index": 4,
+    "label": "Overhead Food Plate",
+    "filename": "media_1794338750993_1520fdb2.jpg",
+    "resolution": "711x897",
+    "tiling": {
+      "latency_sec": 1.254,
+      "tiles": 4,
+      "classes": [
+        {
+          "class": "rice",
+          "class_id": 66,
+          "area_percent": 5.15
+        },
+        {
+          "class": "pork",
+          "class_id": 47,
+          "area_percent": 2.85
+        },
+        {
+          "class": "chicken duck",
+          "class_id": 48,
+          "area_percent": 1.14
+        },
+        {
+          "class": "steak",
+          "class_id": 46,
+          "area_percent": 1.07
+        },
+        {
+          "class": "cilantro mint",
+          "class_id": 89,
+          "area_percent": 0.84
+        },
+        {
+          "class": "noodles",
+          "class_id": 65,
+          "area_percent": 0.74
+        }
+      ],
+      "food_pixels": 75148
+    },
+    "direct_resize": {
+      "latency_sec": 0.303,
+      "tiles": 1,
+      "classes": [
+        {
+          "class": "rice",
+          "class_id": 66,
+          "area_percent": 4.83
+        },
+        {
+          "class": "broccoli",
+          "class_id": 87,
+          "area_percent": 2.97
+        },
+        {
+          "class": "noodles",
+          "class_id": 65,
+          "area_percent": 1.33
+        },
+        {
+          "class": "steak",
+          "class_id": 46,
+          "area_percent": 0.17
+        }
+      ],
+      "food_pixels": 59331
+    },
+    "letterbox_pad": {
+      "latency_sec": 0.324,
+      "tiles": 1,
+      "classes": [
+        {
+          "class": "broccoli",
+          "class_id": 87,
+          "area_percent": 5.75
+        },
+        {
+          "class": "rice",
+          "class_id": 66,
+          "area_percent": 5.11
+        }
+      ],
+      "food_pixels": 69282
+    }
+  },
+  {
+    "image_index": 5,
+    "label": "Dual-View Meal Top View",
+    "filename": "media_1793870701374_81eb298c.jpg",
+    "resolution": "554x554",
+    "tiling": {
+      "latency_sec": 1.308,
+      "tiles": 4,
+      "classes": [
+        {
+          "class": "chicken duck",
+          "class_id": 48,
+          "area_percent": 15.12
+        },
+        {
+          "class": "noodles",
+          "class_id": 65,
+          "area_percent": 10.58
+        },
+        {
+          "class": "rice",
+          "class_id": 66,
+          "area_percent": 2.1
+        },
+        {
+          "class": "egg",
+          "class_id": 24,
+          "area_percent": 1.1
+        }
+      ],
+      "food_pixels": 88708
+    },
+    "direct_resize": {
+      "latency_sec": 0.322,
+      "tiles": 1,
+      "classes": [
+        {
+          "class": "noodles",
+          "class_id": 65,
+          "area_percent": 13.13
+        },
+        {
+          "class": "chicken duck",
+          "class_id": 48,
+          "area_percent": 12.82
+        },
+        {
+          "class": "rice",
+          "class_id": 66,
+          "area_percent": 1.79
+        },
+        {
+          "class": "egg",
+          "class_id": 24,
+          "area_percent": 1.1
+        }
+      ],
+      "food_pixels": 88491
+    },
+    "letterbox_pad": {
+      "latency_sec": 0.328,
+      "tiles": 1,
+      "classes": [
+        {
+          "class": "noodles",
+          "class_id": 65,
+          "area_percent": 13.13
+        },
+        {
+          "class": "chicken duck",
+          "class_id": 48,
+          "area_percent": 12.82
+        },
+        {
+          "class": "rice",
+          "class_id": 66,
+          "area_percent": 1.79
+        },
+        {
+          "class": "egg",
+          "class_id": 24,
+          "area_percent": 1.1
+        }
+      ],
+      "food_pixels": 88491
+    }
+  }
+]

@@ -48,44 +48,72 @@ def build_weight_estimates(
     for item in components:
         category = density_category(item["name"])
         density = density_table.get(category, default_density)
+        elevation = item.get("elevation", "medium")
+        side_used = item.get("side_view_used", False)
+
+        area_frac = float(item.get("food_area_fraction", 0.0))
+
         if plate_scale.get("detected") and total_share > 0:
-            normalized_share = item["food_area_fraction"] / total_share
+            normalized_share = max(0.0, area_frac) / total_share
             area_cm2 = plate_scale["food_footprint_cm2"] * normalized_share
             shape = item["shape_factor"]
             vol_min = area_cm2 * item["height_cm_min"] * max(0.2, shape * 0.8)
             vol_max = area_cm2 * item["height_cm_max"] * min(1.0, shape * 1.2)
-            method = "calibrated top-view food footprint × estimated side-view height × shape factor"
+            if side_used:
+                method = f"Calibrated top footprint ({area_cm2:.1f} cm²) × side-view elevation profile ('{elevation}') × geometric shape factor ({shape:.2f}) × density range"
+            else:
+                method = f"Calibrated top footprint ({area_cm2:.1f} cm²) × standard category height baseline × geometric shape factor ({shape:.2f}) × density range"
         else:
             vol_min, vol_max = item["volume_ml_min"], item["volume_ml_max"]
-            method = "Qwen two-view volume estimate; plate calibration unavailable"
-        grams_min = vol_min * density["min"]
-        grams_max = vol_max * density["max"]
-        estimate = ((vol_min + vol_max) / 2) * ((density["min"] + density["max"]) / 2)
+            reason = plate_scale.get("reason", "plate rim not detected")
+            method = f"Heuristic volume fallback (uncalibrated: {reason}) × density range"
 
-        # Empirical portion weight bounds from IIIT-H 3,278 weighed Indian servings
-        name_lower = item["name"].lower()
-        if "papad" in name_lower:
-            estimate = min(estimate, 25.0)
-            grams_min = min(grams_min, 5.0)
-            grams_max = min(grams_max, 25.0)
-        elif any(b in name_lower for b in ("phulka", "roti", "chapati")):
-            if estimate > 90.0:
-                estimate = min(estimate, 80.0)
-        elif "chutney" in name_lower or "pickle" in name_lower:
-            estimate = min(estimate, 45.0)
+        # Check for zero detected area: do not assign artificial minimum weights to 0-area items
+        if area_frac <= 0.0 or vol_max <= 0.0:
+            vol_min = 0.0
+            vol_max = 0.0
+            grams_min = 0.0
+            grams_max = 0.0
+            estimate = 0.0
+            w_min = 0
+            w_max = 0
+            w_est = 0
+        else:
+            grams_min = max(5.0, vol_min * density["min"])
+            grams_max = max(grams_min, vol_max * density["max"])
+            estimate = max(5.0, ((vol_min + vol_max) / 2) * ((density["min"] + density["max"]) / 2))
 
-        confidence = item["confidence"]
+            # Empirical portion weight bounds from IIIT-H 3,278 weighed Indian servings
+            name_lower = item["name"].lower()
+            if "papad" in name_lower:
+                estimate = min(estimate, 25.0)
+                grams_min = min(grams_min, 5.0)
+                grams_max = min(grams_max, 25.0)
+            elif any(b in name_lower for b in ("phulka", "roti", "chapati")):
+                if estimate > 90.0:
+                    estimate = min(estimate, 80.0)
+            elif "chutney" in name_lower or "pickle" in name_lower:
+                estimate = min(estimate, 45.0)
+
+            w_est = max(5, round(estimate / 10) * 10)
+            w_min = max(5, round(grams_min / 10) * 10)
+            w_max = max(w_min, round(grams_max / 10) * 10)
+
+        confidence = item.get("confidence", "medium")
         if not plate_scale.get("detected"):
             confidence = "low"
         elif plate_scale.get("confidence") == "low" and confidence == "high":
             confidence = "medium"
+
         estimates.append({
             "name": item["name"],
+            "elevation": elevation,
+            "side_view_used": side_used,
             "volume_ml": {"min": round(vol_min), "estimate": round((vol_min + vol_max) / 2), "max": round(vol_max)},
             "density_g_per_ml": {"min": density["min"], "max": density["max"]},
-            "weight_g": {"min": round(grams_min / 10) * 10, "estimate": round(estimate / 10) * 10, "max": round(grams_max / 10) * 10},
+            "weight_g": {"min": w_min, "estimate": w_est, "max": w_max},
             "confidence": confidence,
-            "method": method + " × food-category density range",
+            "method": method,
         })
     return estimates
 

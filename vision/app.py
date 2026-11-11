@@ -102,7 +102,7 @@ async def health() -> dict[str, Any]:
         "segmenter_class_count": len(CLASS_NAMES),
         "segmenter_classes": list(CLASS_NAMES.values()),
         "segmenter_device": str(DEVICE),
-        "segmenter_input_mode": "native-resolution overlapping tiles",
+        "segmenter_input_mode": os.getenv("FOODSEG_STRATEGY", "letterbox-padding-512x512"),
         "segmenter_tile_size": FOODSEG_TILE_SIZE,
         "segmenter_tile_overlap": FOODSEG_TILE_OVERLAP,
         "qwen_context_tokens": QWEN_NUM_CTX,
@@ -142,32 +142,50 @@ async def _read_food_image(upload: UploadFile, field_name: str) -> tuple[Image.I
 @app.post("/vision")
 async def vision(
     top_image: UploadFile = File(..., description="Photo taken directly above the meal"),
-    side_image: UploadFile = File(..., description="Photo taken from the side at plate level"),
+    side_image: UploadFile | None = File(None, description="Photo taken from the side at plate level"),
     plate_diameter_cm: float = Form(..., description="User-selected plate diameter in cm (typical: 20, 25, or 30)"),
 ) -> dict[str, Any]:
     """Estimate ingredient weights from paired views and a known plate diameter."""
     if not 15 <= plate_diameter_cm <= 40:
         raise HTTPException(status_code=422, detail="plate_diameter_cm must be between 15 and 40 cm")
-    top, _ = await _read_food_image(top_image, "top_image")
-    side, _ = await _read_food_image(side_image, "side_image")
+    top, top_bytes = await _read_food_image(top_image, "top_image")
+    side, side_bytes = None, None
+    has_distinct_side = False
+    if side_image is not None and getattr(side_image, "filename", None):
+        try:
+            side, side_bytes = await _read_food_image(side_image, "side_image")
+            has_distinct_side = bool(side_bytes and side_bytes != top_bytes)
+        except Exception as exc:
+            logger.warning("Side image decode failed (%s). Proceeding with top view only.", exc)
+            side = None
+            has_distinct_side = False
 
     started = time.perf_counter()
     top_areas, top_detections, top_food_pixels = segmentation_summary(
         top, segmenter, DEVICE, CLASS_NAMES, FOODSEG_TILE_SIZE, FOODSEG_TILE_OVERLAP, CONFIDENCE
     )
-    side_areas, side_detections, _ = segmentation_summary(
-        side, segmenter, DEVICE, CLASS_NAMES, FOODSEG_TILE_SIZE, FOODSEG_TILE_OVERLAP, CONFIDENCE
-    )
+    if side and has_distinct_side:
+        side_areas, side_detections, _ = segmentation_summary(
+            side, segmenter, DEVICE, CLASS_NAMES, FOODSEG_TILE_SIZE, FOODSEG_TILE_OVERLAP, CONFIDENCE
+        )
+    else:
+        side_areas, side_detections = [], []
     plate_scale = detect_top_plate_scale(top, plate_diameter_cm, top_food_pixels)
     segmented_at = time.perf_counter()
 
     top_thumb_b64 = get_vlm_thumbnail_b64(top, max_dim=512)
+    side_thumb_b64 = get_vlm_thumbnail_b64(side, max_dim=512) if (side and has_distinct_side) else None
 
     parsed = None
     vlm_failed = False
     try:
         parsed = await query_qwen_vlm(
-            top_thumb_b64, plate_diameter_cm, OLLAMA_URL, QWEN_MODEL, num_threads=4
+            top_thumb_b64=top_thumb_b64,
+            plate_diameter_cm=plate_diameter_cm,
+            ollama_url=OLLAMA_URL,
+            qwen_model=QWEN_MODEL,
+            side_thumb_b64=side_thumb_b64,
+            num_threads=4,
         )
     except Exception as exc:
         logger.warning("Ollama/Qwen processing skipped or unusable (%s). Falling back to FoodSeg103 geometric segmentation.", exc)
@@ -216,12 +234,16 @@ async def vision(
         components = []
         for c_name, a_pct in merged_dict.items():
             share = a_pct / total_area
+            cat = density_category(c_name)
+            is_flat = cat in ("bread", "papad")
             components.append({
                 "name": c_name,
                 "food_area_fraction": round(share, 3),
-                "height_cm_min": 1.0,
-                "height_cm_max": 2.2,
-                "shape_factor": 0.7,
+                "elevation": "flat" if is_flat else "medium",
+                "side_view_used": False,
+                "height_cm_min": (0.01 if is_flat else 0.05) * plate_diameter_cm,
+                "height_cm_max": (0.03 if is_flat else 0.12) * plate_diameter_cm,
+                "shape_factor": 0.5 if is_flat else 0.7,
                 "volume_ml_min": max(25.0, share * 250.0),
                 "volume_ml_max": max(50.0, share * 500.0),
                 "confidence": "low",
@@ -237,6 +259,8 @@ async def vision(
             components.append({
                 "name": "Plated Food",
                 "food_area_fraction": 0.7,
+                "elevation": "medium",
+                "side_view_used": False,
                 "height_cm_min": 1.0,
                 "height_cm_max": 2.2,
                 "shape_factor": 0.7,
@@ -245,12 +269,16 @@ async def vision(
                 "confidence": "low",
             })
 
-        parsed = {"dish": dish_name, "components": components}
+        parsed = {
+            "dish": dish_name,
+            "components": components,
+            "side_view_observation": "VLM reasoning unavailable; geometric segmentation fallback applied.",
+        }
 
     logger.info(
-        "vision completed: segmentation=%.2fs qwen=%.2fs total=%.2fs top=%sx%s side=%sx%s",
+        "vision completed: segmentation=%.2fs qwen=%.2fs total=%.2fs top=%sx%s side=%s",
         segmented_at - started, time.perf_counter() - segmented_at, time.perf_counter() - started,
-        top.width, top.height, side.width, side.height,
+        top.width, top.height, f"{side.width}x{side.height}" if side else "none",
     )
     estimates = build_weight_estimates(parsed["components"], plate_scale, DENSITY_TABLE)
     top_classes = [item["class"] for item in top_areas]
@@ -260,11 +288,25 @@ async def vision(
         "These are AI-assisted estimates, not measured weights.",
         "Plate calibration depends on a visible, fully framed plate rim; occlusion or perspective can reduce accuracy.",
         "The multi-class segmentation model can miss or confuse ingredients, especially when foods overlap.",
-        "Food density varies with packing, moisture, cooking, and recipe.",
+        "Food bulk density varies with packing, moisture, cooking method, and recipe.",
     ]
+    if not has_distinct_side:
+        limitations.append(
+            "Only the overhead top-view photo was available or distinct. Standard category elevation was assumed without side-view height observation."
+        )
+    else:
+        side_obs_text = parsed.get("side_view_observation", "observed")
+        limitations.append(
+            f"Dual views analyzed: overhead photo used for 2D footprint; side-view observation ('{side_obs_text}') used to modulate elevation profiles."
+        )
+    if not plate_scale.get("detected"):
+        limitations.append(
+            f"Plate rim calibration could not be completed ({plate_scale.get('reason', 'undetected')}); portion volumes rely on uncalibrated heuristic fallbacks."
+        )
     if vlm_failed:
         limitations.append(
-            "VLM visual reasoning timed out or was unavailable; food components were estimated from filtered geometric segmentation."
+            "VLM visual reasoning failed or was unavailable; components were estimated from geometric segmentation masks. "
+            "Labels represent coarse visual categories, not verified culinary ingredients."
         )
     if top_classes and side_classes and not views_share_class:
         limitations.append(
@@ -281,22 +323,34 @@ async def vision(
         name = item["name"]
         ingredient_totals[name] = ingredient_totals.get(name, 0) + int(item["weight_g"]["estimate"])
 
+    method_summary = (
+        "Calibrated top-view plate scale (Hough circle) combined with side-view elevation profile and category bulk density bounding."
+        if plate_scale.get("detected")
+        else f"Uncalibrated heuristic fallback ({plate_scale.get('reason', 'rim undetected')}) with category bulk density bounding."
+    )
+
     return {
         "dish": parsed["dish"],
         "ingredients": ingredient_totals,
         "estimates": estimates,
         "scale_reference": {"plate_diameter_cm": plate_diameter_cm, **plate_scale},
+        "side_view_observation": parsed.get("side_view_observation", ""),
         "image_processing": {
             "top_image_px": {"width": top.width, "height": top.height},
-            "side_image_px": {"width": side.width, "height": side.height},
-            "qwen_input": "512px LANCZOS thumbnail for optimal CPU VLM inference latency and visual token budget",
-            "segmentation_input": "native-resolution overlapping tiles; all original pixels are covered",
+            "side_image_px": {"width": side.width, "height": side.height} if side else None,
+            "side_view_provided": has_distinct_side,
+            "qwen_input": "Dual 512px LANCZOS thumbnails (overhead layout + side elevation)" if has_distinct_side else "Single 512px LANCZOS thumbnail (overhead layout only)",
+            "segmentation_input": (
+                "native-resolution overlapping tiles; all original pixels are covered"
+                if os.getenv("FOODSEG_STRATEGY", "letterbox").lower() in ("tiling", "tiles", "overlap")
+                else "aspect-ratio-preserving letterbox padding to 512x512; unpadded masks resampled to original resolution"
+            ),
         },
-        "method": "Qwen estimates component volumes from two views; backend multiplies volume ranges by food-category density ranges.",
+        "method": method_summary,
         "limitations": limitations,
         "segmentation": {
             "top_view": {"areas": top_areas, "detections": top_detections},
-            "side_view": {"areas": side_areas, "detections": side_detections},
+            "side_view": {"areas": side_areas, "detections": side_detections} if side else None,
         },
     }
 

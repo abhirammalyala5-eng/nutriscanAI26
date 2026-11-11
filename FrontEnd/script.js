@@ -2,12 +2,12 @@
 
 const topImageInput = document.getElementById("topImage");
 const sideImageInput = document.getElementById("sideImage");
+const topCameraInput = document.getElementById("topCameraInput");
+const sideCameraInput = document.getElementById("sideCameraInput");
 const topPreview = document.getElementById("topPreview");
 const sidePreview = document.getElementById("sidePreview");
 const topPlaceholder = document.getElementById("topPlaceholder");
 const sidePlaceholder = document.getElementById("sidePlaceholder");
-const topDropZone = document.getElementById("topDropZone");
-const sideDropZone = document.getElementById("sideDropZone");
 const topUploadPanel = document.getElementById("topUploadPanel");
 const sideUploadPanel = document.getElementById("sideUploadPanel");
 const plateDiameterInput = document.getElementById("plateDiameter");
@@ -20,7 +20,7 @@ window.currentIngredients = {};
 window.currentDish = "Plated Meal";
 
 // ─────────────────────────────────────────────────────────────
-// 1. FILE UPLOAD & PREVIEW LOGIC
+// 1. FILE UPLOAD & PREVIEW LOGIC (Desktop & Mobile Camera)
 // ─────────────────────────────────────────────────────────────
 function setPreviewImage(file, previewEl, placeholderEl) {
     if (!file) return;
@@ -40,10 +40,26 @@ if (topImageInput) {
     });
 }
 
+if (topCameraInput) {
+    topCameraInput.addEventListener("change", function () {
+        if (topCameraInput.files.length > 0) {
+            setPreviewImage(topCameraInput.files[0], topPreview, topPlaceholder);
+        }
+    });
+}
+
 if (sideImageInput) {
     sideImageInput.addEventListener("change", function () {
         if (sideImageInput.files.length > 0) {
             setPreviewImage(sideImageInput.files[0], sidePreview, sidePlaceholder);
+        }
+    });
+}
+
+if (sideCameraInput) {
+    sideCameraInput.addEventListener("change", function () {
+        if (sideCameraInput.files.length > 0) {
+            setPreviewImage(sideCameraInput.files[0], sidePreview, sidePlaceholder);
         }
     });
 }
@@ -77,58 +93,56 @@ setupDragAndDrop(topUploadPanel, topImageInput, topPreview, topPlaceholder);
 setupDragAndDrop(sideUploadPanel, sideImageInput, sidePreview, sidePlaceholder);
 
 // ─────────────────────────────────────────────────────────────
-// 2. QUICK DEMO LOAD & CLEAR FUNCTIONS
+// 2. OPTIONAL SIDE VIEW TOGGLE & CLEAR FUNCTIONS
 // ─────────────────────────────────────────────────────────────
-async function loadSampleMeal(autoScroll = false) {
-    try {
-        const topResp = await fetch("images/sample_meal_top.jpg");
-        const topBlob = await topResp.blob();
-        const topFile = new File([topBlob], "sample_meal_top.jpg", { type: "image/jpeg" });
-
-        const sideResp = await fetch("images/sample_meal_side.jpg");
-        const sideBlob = await sideResp.blob();
-        const sideFile = new File([sideBlob], "sample_meal_side.jpg", { type: "image/jpeg" });
-
-        const dtTop = new DataTransfer();
-        dtTop.items.add(topFile);
-        topImageInput.files = dtTop.files;
-        setPreviewImage(topFile, topPreview, topPlaceholder);
-
-        const dtSide = new DataTransfer();
-        dtSide.items.add(sideFile);
-        sideImageInput.files = dtSide.files;
-        setPreviewImage(sideFile, sidePreview, sidePlaceholder);
-
-        if (autoScroll) {
-            document.getElementById("analyzer").scrollIntoView({ behavior: "smooth" });
-        }
-    } catch (err) {
-        console.error("Failed to load sample meal:", err);
-    }
+function showSideView() {
+    const sidePanel = document.getElementById("sideUploadPanel");
+    const addBtn = document.getElementById("addSideViewBtn");
+    const grid = document.getElementById("uploadGrid");
+    if (sidePanel) sidePanel.style.display = "flex";
+    if (addBtn) addBtn.style.display = "none";
+    if (grid) grid.classList.add("has-side-view");
 }
 
-function clearUploads() {
-    if (topImageInput) topImageInput.value = "";
+function hideSideView() {
+    const sidePanel = document.getElementById("sideUploadPanel");
+    const addBtn = document.getElementById("addSideViewBtn");
+    const grid = document.getElementById("uploadGrid");
+    if (sidePanel) sidePanel.style.display = "none";
+    if (addBtn) addBtn.style.display = "inline-flex";
+    if (grid) grid.classList.remove("has-side-view");
     if (sideImageInput) sideImageInput.value = "";
-    if (topPreview) {
-        topPreview.src = "";
-        topPreview.style.display = "none";
-        const topCont = topPreview.closest(".upload-preview, .preview-area");
-        if (topCont) topCont.classList.remove("has-image");
-    }
+    if (sideCameraInput) sideCameraInput.value = "";
     if (sidePreview) {
         sidePreview.src = "";
         sidePreview.style.display = "none";
         const sideCont = sidePreview.closest(".upload-preview, .preview-area");
         if (sideCont) sideCont.classList.remove("has-image");
     }
-    if (topPlaceholder) topPlaceholder.style.display = "flex";
     if (sidePlaceholder) sidePlaceholder.style.display = "flex";
+}
+
+window.showSideView = showSideView;
+window.hideSideView = hideSideView;
+
+function clearUploads() {
+    if (topImageInput) topImageInput.value = "";
+    if (topCameraInput) topCameraInput.value = "";
+    if (topPreview) {
+        topPreview.src = "";
+        topPreview.style.display = "none";
+        const topCont = topPreview.closest(".upload-preview, .preview-area");
+        if (topCont) topCont.classList.remove("has-image");
+    }
+    if (topPlaceholder) topPlaceholder.style.display = "flex";
+
+    hideSideView();
+
     resultDiv.innerHTML = `
         <div class="empty-state">
             <div class="empty-state-icon">🍽️</div>
             <p class="empty-state-heading">Photos cleared</p>
-            <p class="empty-state-body">Upload new photos, then click Analyze.</p>
+            <p class="empty-state-body">Upload an overhead photo of your plate, then click Analyze.</p>
         </div>
     `;
 }
@@ -142,13 +156,19 @@ function escapeHtml(text) {
 // 3. MAIN DUAL-VIEW INFERENCE ORCHESTRATION
 // ─────────────────────────────────────────────────────────────
 async function analyzeFood() {
-    if (!topImageInput || topImageInput.files.length === 0) {
-        resultDiv.innerHTML = `<div class="alert-error"><strong>Missing overhead photo.</strong> Please upload or select an overhead photo of the plate.</div>`;
+    const topFile = (topImageInput && topImageInput.files && topImageInput.files.length > 0)
+        ? topImageInput.files[0]
+        : ((topCameraInput && topCameraInput.files && topCameraInput.files.length > 0) ? topCameraInput.files[0] : null);
+
+    if (!topFile) {
+        resultDiv.innerHTML = `<div class="alert-error"><strong>Missing overhead photo.</strong> Please upload or capture an overhead photo of the plate.</div>`;
         return;
     }
 
-    const topFile = topImageInput.files[0];
-    const sideFile = (sideImageInput && sideImageInput.files.length > 0) ? sideImageInput.files[0] : null;
+    const sideFile = (sideImageInput && sideImageInput.files && sideImageInput.files.length > 0)
+        ? sideImageInput.files[0]
+        : ((sideCameraInput && sideCameraInput.files && sideCameraInput.files.length > 0) ? sideCameraInput.files[0] : null);
+
     const plateDiameter = plateDiameterInput ? parseFloat(plateDiameterInput.value) || 25.0 : 25.0;
 
     const formData = new FormData();
@@ -541,6 +561,14 @@ function renderAnalysisResults(data) {
         </div>
     `;
 
+    // 6. Medical Disclaimer Card
+    const disclaimerHtml = `
+        <div class="disclaimer-card">
+            <span class="disclaimer-badge">Medical Disclaimer</span>
+            <p>Nutritional calculations and weight estimates are automated approximations based on visual modeling and regression. They are not intended or recommended for medical, diagnostic, or clinical dietary purposes.</p>
+        </div>
+    `;
+
     // Combine into final DOM
     resultDiv.innerHTML = `
         <div class="result-card-header">
@@ -552,6 +580,7 @@ function renderAnalysisResults(data) {
         ${interactiveTrayHtml}
         ${regressionTableHtml}
         ${actionToolbarHtml}
+        ${disclaimerHtml}
     `;
 }
 
